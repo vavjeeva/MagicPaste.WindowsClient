@@ -1,20 +1,30 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MagicPaste.WindowsClient
 {
-    public static class AzureSignalRClient
+    public class AzureSignalRClient
     {
-        private static HubConnection connection;
-        public static async void Initialize()
+        private MainForm mainForm;
+        public AzureSignalRClient(MainForm _mainForm)
+        {
+            mainForm = _mainForm;
+        }
+        private HubConnection connection;
+        TaskScheduler uiTaskScheduler = TaskScheduler.FromCurrentSynchronizationContext();
+        public async void Initialize()
         {
             connection = new HubConnectionBuilder()
-                 .WithUrl("https://magicpaste.azurewebsites.net/MagicPaste")
+                 .WithUrl("https://magicpaste.azurewebsites.net/MagicPaste")                 
                  .Build();
 
             connection.On<string>("ReceiveData", (msg) =>
             {
-                Console.WriteLine(msg);
+                mainForm.Invoke((Action)(() =>
+                   mainForm.txtIncomingData.Text = msg
+                   ));
             });
 
             try
@@ -27,9 +37,14 @@ namespace MagicPaste.WindowsClient
             }
         }
 
-        public static async void SendData(string msg)
+        public async void SendData(string msg)
         {
             await connection.InvokeAsync("SendData", msg);
+        }
+
+        public async void Close()
+        {
+            await connection.StopAsync();
         }
     }
 }

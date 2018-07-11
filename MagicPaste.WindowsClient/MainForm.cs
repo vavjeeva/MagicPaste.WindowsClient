@@ -18,49 +18,31 @@ namespace MagicPaste.WindowsClient
 {
     public partial class MainForm : Form
     {
-        [DllImport("user32.dll")]
-        private static extern bool GetCursorPos(out Point pt);
-
-        [DllImport("user32.dll", EntryPoint = "WindowFromPoint", CharSet = CharSet.Auto, ExactSpelling = true)]
-        private static extern IntPtr WindowFromPoint(Point pt);
-
-        // Activate an application window.
-        [DllImport("USER32.DLL")]
-        public static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [DllImportAttribute("user32.dll", EntryPoint = "GetForegroundWindow")]
-        public static extern IntPtr GetForegroundWindow();
-
-        [DllImport("user32.dll", SetLastError = true)]
-        static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-        private string originalClipboardText = null;
-
+        AzureSignalRClient client;
         public MainForm()
         {
             InitializeComponent();
+            client = new AzureSignalRClient(this);
         }
 
         private void MainForm_Load(object sender, EventArgs e)
         {
             HotkeyManager.Current.AddOrReplace("OnHotKeyPressed", Keys.Control | Keys.Shift | Keys.C, true, OnHotKeyPressed);
-            AzureSignalRClient.Initialize();
+            client.Initialize();
 
-            //this.WindowState = FormWindowState.Minimized;
-            //MinimizeToTray();
-            //this.ShowInTaskbar = false;
+            this.WindowState = FormWindowState.Minimized;
+            MinimizeToTray();
+            this.ShowInTaskbar = false;
         }
 
         private void OnHotKeyPressed(object sender, HotkeyEventArgs e)
         {
             try
-            {
-                CopySelectedDataToClipboard();
-                var clipText = Clipboard.GetText();
-                if (!string.IsNullOrEmpty(clipText))
+            {                          
+                var clipboardText = Clipboard.GetText();
+                if (!string.IsNullOrEmpty(clipboardText))
                 {
-                    originalClipboardText = clipText;
-                    AzureSignalRClient.SendData(clipText);                    
-                    Clipboard.SetText(string.Empty);
+                    client.SendData(clipboardText);                                        
                 }
 
             }
@@ -98,47 +80,7 @@ namespace MagicPaste.WindowsClient
         private void MainForm_Closing(object sender, FormClosingEventArgs e)
         {
             notifyMagicPasteIcon.Visible = false;
-        }
-        
-        private async void CopySelectedDataToClipboard()
-        {
-            Point p;
-            if (GetCursorPos(out p))
-            {
-                IntPtr ptr = WindowFromPoint(p);
-                if (ptr != IntPtr.Zero)
-                {
-                    SetForegroundWindow(ptr);
-
-                    //wait for window to get focus quick and ugly
-                    // probably a cleaner way to wait for windows to send a message
-                    // that it has updated the foreground window
-                    await Task.Delay(300);
-
-                    //try to copy text in the current window
-                    SendKeys.Send("^c");
-
-                    await WaitForClipboardToUpdate(originalClipboardText);
-                }
-            }
-        }
-
-        private static async Task WaitForClipboardToUpdate(string clipboardText)
-        {
-            Stopwatch sw = Stopwatch.StartNew();
-            while (true)
-            {
-                if (await DoClipboardCheck(clipboardText)) return;
-                if (sw.ElapsedMilliseconds >= 1500) throw new Exception("TIMED OUT WAITING FOR CLIPBOARD TO UPDATE.");
-            }
-        }
-
-        private static async Task<bool> DoClipboardCheck(string clipboardText)
-        {
-            await Task.Delay(100);
-            if (!Clipboard.ContainsText()) return false;
-            var currentText = Clipboard.GetText();
-            return currentText != clipboardText;
-        }
+            client.Close();
+        }              
     }
 }
